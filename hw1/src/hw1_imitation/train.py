@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -118,6 +121,8 @@ def run_training(config: TrainConfig) -> None:
         hidden_dims=config.hidden_dims,
     ).to(device)
 
+    # model = torch.compile(model)
+
     exp_name = f"seed_{config.seed}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     if config.exp_name is not None:
         exp_name += f"_{config.exp_name}"
@@ -128,6 +133,42 @@ def run_training(config: TrainConfig) -> None:
     logger = Logger(log_dir)
 
     ### TODO: PUT YOUR MAIN TRAINING LOOP HERE ###
+    global_step = 0
+    from torch import optim
+    optimizer = optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+    for epoch in range(config.num_epochs):
+        model.train()
+        for states, action_chunks in loader:
+            states = states.float().to(device)
+            action_chunks = action_chunks.float().to(device)
+            
+            loss = model.compute_loss(states, action_chunks)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            if global_step % 100 == 0:
+                wandb.log({"train/loss": loss.item()}, step=global_step)
+            
+            global_step += 1
+            if global_step % config.eval_interval == 0:
+                model.eval()
+                from hw1_imitation.evaluation import evaluate_policy
+                print(f"Running eval at step {global_step}")
+                evaluate_policy(
+                    model=model,
+                    normalizer=normalizer,
+                    device=device,
+                    chunk_size=config.chunk_size,
+                    video_size=config.video_size,
+                    num_video_episodes=config.num_video_episodes,
+                    flow_num_steps=config.flow_num_steps,
+                    step=global_step,
+                    logger=logger
+                )
+            
+            model.train()
 
     logger.dump_for_grading()
 
