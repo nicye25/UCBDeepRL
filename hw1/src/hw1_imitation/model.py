@@ -134,7 +134,8 @@ class FlowMatchingPolicy(BasePolicy):
 
         target_velocity = action_chunk - noise
         predicted_velocity = self.forward(state, action_chunk_tau, tau)
-        return nn.MSELoss(predicted_velocity, target_velocity)
+        loss_fn = nn.MSELoss()
+        return loss_fn(predicted_velocity, target_velocity)
 
     def sample_actions(
         self,
