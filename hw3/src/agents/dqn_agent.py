@@ -67,25 +67,25 @@ class DQNAgent(nn.Module):
         # Compute target values
         with torch.no_grad():
             # TODO(Section 2.4): compute target values
-            next_qa_values = None
+            next_qa_values = self.target_critic(next_obs)
 
             if self.use_double_q:
                 # TODO(Section 2.5): implement double-Q target action selection
                 next_action = None
             else:
-                next_action = None
+                next_action = next_qa_values.argmax(dim=-1)
 
-            next_q_values = None
+            next_q_values = next_qa_values.gather(1, next_action.unsqueeze(1)).squeeze(1)
             assert next_q_values.shape == (batch_size,), next_q_values.shape
 
-            target_values = None
+            target_values = reward + self.discount * (1 - done.float()) * next_q_values
             assert target_values.shape == (batch_size,), target_values.shape
             # ENDTODO
 
         # TODO(Section 2.4): train the critic with the target values
-        qa_values = None
-        q_values = None
-        loss = None
+        qa_values = self.critic(obs)
+        q_values = qa_values.gather(1, action.unsqueeze(1).long()).squeeze(1)
+        loss = self.critic_loss(q_values, target_values)
         # ENDTODO
 
         self.critic_optimizer.zero_grad()
